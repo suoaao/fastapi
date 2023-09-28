@@ -55,10 +55,7 @@ def get_param_sub_dependant(
     *, param: inspect.Parameter, path: str, security_scopes: List[str] = None
 ) -> Dependant:
     depends: params.Depends = param.default
-    if depends.dependency:
-        dependency = depends.dependency
-    else:
-        dependency = param.annotation
+    dependency = depends.dependency if depends.dependency else param.annotation
     return get_sub_dependant(
         depends=depends,
         dependency=dependency,
@@ -166,9 +163,7 @@ def is_scalar_sequence_field(field: Field) -> bool:
                 if not is_scalar_field(sub_field):
                     return False
         return True
-    if lenient_issubclass(field.type_, sequence_types):
-        return True
-    return False
+    return bool(lenient_issubclass(field.type_, sequence_types))
 
 
 def get_dependant(
@@ -201,7 +196,7 @@ def get_dependant(
             ), "Path params must have no defaults or use Path(...)"
             assert is_scalar_field(
                 field=param_field
-            ), f"Path params must be of one of the supported types"
+            ), "Path params must be of one of the supported types"
             param_field = get_param_field(
                 param=param,
                 default_schema=params.Path,
@@ -249,10 +244,8 @@ def get_param_field(
     default_schema: Type[params.Param] = params.Param,
     force_type: params.ParamTypes = None,
 ) -> Field:
-    default_value = Required
     had_schema = False
-    if not param.default == param.empty:
-        default_value = param.default
+    default_value = param.default if param.default != param.empty else Required
     if isinstance(default_value, Schema):
         had_schema = True
         schema = default_value
@@ -264,9 +257,7 @@ def get_param_field(
     else:
         schema = default_schema(default_value)
     required = default_value == Required
-    annotation: Any = Any
-    if not param.annotation == param.empty:
-        annotation = param.annotation
+    annotation = param.annotation if param.annotation != param.empty else Any
     annotation = get_annotation_from_schema(annotation, schema)
     if not schema.alias and getattr(schema, "convert_underscores", None):
         alias = param.name.replace("_", "-")
@@ -554,7 +545,7 @@ def get_body_field(*, dependant: Dependant, name: str) -> Optional[Field]:
     embed = getattr(first_param.schema, "embed", None)
     if len(flat_dependant.body_params) == 1 and not embed:
         return get_schema_compatible_field(field=first_param)
-    model_name = "Body_" + name
+    model_name = f"Body_{name}"
     BodyModel = create_model(model_name)
     for f in flat_dependant.body_params:
         BodyModel.__fields__[f.name] = get_schema_compatible_field(field=f)
